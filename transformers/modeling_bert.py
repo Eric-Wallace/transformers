@@ -32,6 +32,8 @@ from .modeling_utils import PreTrainedModel, prune_linear_layer
 from .configuration_bert import BertConfig
 from .file_utils import add_start_docstrings
 
+from reversible_modules import ReversibleBlock
+
 logger = logging.getLogger(__name__)
 
 BERT_PRETRAINED_MODEL_ARCHIVE_MAP = {
@@ -144,16 +146,23 @@ BertLayerNorm = torch.nn.LayerNorm
 
 class BertEmbeddings(nn.Module):
     """Construct the embeddings from word, position and token_type embeddings.
-    """
+    TODO, albert trick with the up projection? How does that play with reformer
+    doing embedding duplication?
+    """    
     def __init__(self, config):
-        super(BertEmbeddings, self).__init__()
+        super(BertEmbeddings, self).__init__()        
+        
         self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=0)
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
-        # any TensorFlow checkpoint file
-        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        # any TensorFlow checkpoint file        
+        
+        # REFORMER: reformer has the layernorm in the preact spot, so it doesn't make sense to layernorm after the embeddings, because otherwise it will do embedding -> layernorm -> layernorm.
+        self.use_reformer = config.use_reformer
+        if not self.use_reformer: 
+            self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(self, input_ids, token_type_ids=None, position_ids=None):
@@ -169,8 +178,11 @@ class BertEmbeddings(nn.Module):
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
 
         embeddings = words_embeddings + position_embeddings + token_type_embeddings
-        embeddings = self.LayerNorm(embeddings)
-        embeddings = self.dropout(embeddings)
+        if not self.use_reformer:
+            embeddings = self.LayerNorm(embeddings)
+        embeddings = self.dropout(embeddings)        
+        if self.use_reformer: # copy the embeddings twice for reformer-style model
+            embeddings = torch.cat([embeddings, embeddings], dim=2)        
         return embeddings
 
 
@@ -181,7 +193,7 @@ class BertSelfAttention(nn.Module):
             raise ValueError(
                 "The hidden size (%d) is not a multiple of the number of attention "
                 "heads (%d)" % (config.hidden_size, config.num_attention_heads))
-        self.output_attentions = config.output_attentions
+        self.output_attentions = config.output_attentions        
 
         self.num_attention_heads = config.num_attention_heads
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
@@ -193,12 +205,18 @@ class BertSelfAttention(nn.Module):
 
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
 
+        self.use_reformer = config.use_reformer
+        if self.use_reformer: # reformer uses preact, so layernorm is now inside attention block
+            self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)        
+
     def transpose_for_scores(self, x):
         new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
         x = x.view(*new_x_shape)
         return x.permute(0, 2, 1, 3)
 
     def forward(self, hidden_states, attention_mask=None, head_mask=None):
+        if self.use_reformer: # reformer uses preact, so layernorm is now inside attention block
+            hidden_states = self.LayerNorm(hidden_states)
         mixed_query_layer = self.query(hidden_states)
         mixed_key_layer = self.key(hidden_states)
         mixed_value_layer = self.value(hidden_states)
@@ -230,8 +248,8 @@ class BertSelfAttention(nn.Module):
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
         new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
         context_layer = context_layer.view(*new_context_layer_shape)
-
-        outputs = (context_layer, attention_probs) if self.output_attentions else (context_layer,)
+        
+        outputs = context_layer
         return outputs
 
 
@@ -239,13 +257,19 @@ class BertSelfOutput(nn.Module):
     def __init__(self, config):
         super(BertSelfOutput, self).__init__()
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+
+        self.use_reformer = config.use_reformer
+        if not self.use_reformer: # reformer uses preact, so layernorm is now inside attention block
+            self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
         hidden_states = self.dropout(hidden_states)
-        hidden_states = self.LayerNorm(hidden_states + input_tensor)
+        if not self.use_reformer:
+            hidden_states = self.LayerNorm(hidden_states + input_tensor)
+        else:
+            hidden_states = hidden_states + input_tensor
         return hidden_states
 
 
@@ -281,8 +305,8 @@ class BertAttention(nn.Module):
 
     def forward(self, input_tensor, attention_mask=None, head_mask=None):
         self_outputs = self.self(input_tensor, attention_mask, head_mask)
-        attention_output = self.output(self_outputs[0], input_tensor)
-        outputs = (attention_output,) + self_outputs[1:]  # add attentions if we output them
+        attention_output = self.output(self_outputs, input_tensor)                
+        outputs = attention_output
         return outputs
 
 
@@ -295,7 +319,13 @@ class BertIntermediate(nn.Module):
         else:
             self.intermediate_act_fn = config.hidden_act
 
+        self.use_reformer = config.use_reformer
+        if self.use_reformer:
+            self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+
     def forward(self, hidden_states):
+        if self.use_reformer:
+            hidden_states = self.LayerNorm(hidden_states)
         hidden_states = self.dense(hidden_states)
         hidden_states = self.intermediate_act_fn(hidden_states)
         return hidden_states
@@ -305,13 +335,18 @@ class BertOutput(nn.Module):
     def __init__(self, config):
         super(BertOutput, self).__init__()
         self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
-        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.use_reformer = config.use_reformer
+        if not self.use_reformer:
+            self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)    
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
         hidden_states = self.dropout(hidden_states)
-        hidden_states = self.LayerNorm(hidden_states + input_tensor)
+        if not self.use_reformer:
+            hidden_states = self.LayerNorm(hidden_states + input_tensor)
+        else:
+            hidden_states = hidden_states + input_tensor
         return hidden_states
 
 
@@ -324,10 +359,47 @@ class BertLayer(nn.Module):
 
     def forward(self, hidden_states, attention_mask=None, head_mask=None):
         attention_outputs = self.attention(hidden_states, attention_mask, head_mask)
-        attention_output = attention_outputs[0]
+        attention_output = attention_outputs
         intermediate_output = self.intermediate(attention_output)
         layer_output = self.output(intermediate_output, attention_output)
-        outputs = (layer_output,) + attention_outputs[1:]  # add attentions if we output them
+        outputs = layer_output
+        return outputs
+
+
+class ReformerMLPLayer(nn.Module):
+    # just combines BertIntermediate and BertOutput into a single class
+    def __init__(self, config):
+        super(ReformerMLPLayer, self).__init__()
+        self.intermediate = BertIntermediate(config)
+        self.output = BertOutput(config)
+
+    def forward(self, hidden_states):
+        intermediate_output = self.intermediate(hidden_states)
+        return self.output(intermediate_output, hidden_states)
+
+
+class ReformerBertEncoder(nn.Module):
+    # same as BertEncoder, except it does the Attention and MLP in parallel and concatenates their results
+    # ReversibeBlock handles the memory efficiency
+    def __init__(self, config):
+        super(ReformerBertEncoder, self).__init__()
+        module_list = []
+        for _ in range(config.num_hidden_layers):
+            attentionLayer = BertAttention(config)
+            mlpLayer = ReformerMLPLayer(config)
+            revBlock = ReversibleBlock(attentionLayer, mlpLayer)
+            module_list.append(revBlock)
+        self.layer = nn.ModuleList(module_list)
+
+    def forward(self, hidden_states, attention_mask=None, head_mask=None):
+        all_hidden_states = ()
+        all_attentions = ()
+        for i, layer_module in enumerate(self.layer):
+            # pass in a tuple, which is undone in the reversible block
+            layer_outputs = layer_module((hidden_states, attention_mask)) 
+            hidden_states = layer_outputs
+         
+        outputs = hidden_states
         return outputs
 
 
@@ -346,7 +418,7 @@ class BertEncoder(nn.Module):
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
             layer_outputs = layer_module(hidden_states, attention_mask, head_mask[i])
-            hidden_states = layer_outputs[0]
+            hidden_states = layer_outputs
 
             if self.output_attentions:
                 all_attentions = all_attentions + (layer_outputs[1],)
@@ -355,18 +427,21 @@ class BertEncoder(nn.Module):
         if self.output_hidden_states:
             all_hidden_states = all_hidden_states + (hidden_states,)
 
-        outputs = (hidden_states,)
+        outputs = hidden_states
         if self.output_hidden_states:
             outputs = outputs + (all_hidden_states,)
         if self.output_attentions:
             outputs = outputs + (all_attentions,)
-        return outputs  # last-layer hidden state, (all hidden states), (all attentions)
+        return outputs
 
 
 class BertPooler(nn.Module):
     def __init__(self, config):
         super(BertPooler, self).__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        if config.use_reformer:
+            self.dense = nn.Linear(2 * config.hidden_size, config.hidden_size)
+        else:
+            self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.activation = nn.Tanh()
 
     def forward(self, hidden_states):
@@ -380,18 +455,26 @@ class BertPooler(nn.Module):
 
 class BertPredictionHeadTransform(nn.Module):
     def __init__(self, config):
-        super(BertPredictionHeadTransform, self).__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        super(BertPredictionHeadTransform, self).__init__()    
         if isinstance(config.hidden_act, str) or (sys.version_info[0] == 2 and isinstance(config.hidden_act, unicode)):
             self.transform_act_fn = ACT2FN[config.hidden_act]
         else:
             self.transform_act_fn = config.hidden_act
-        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.use_reformer = config.use_reformer
+        if self.use_reformer:
+            self.dense = nn.Linear(2 * config.hidden_size, config.hidden_size)
+            self.LayerNorm = BertLayerNorm(2 * config.hidden_size, eps=config.layer_norm_eps)
+        else:
+            self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+            self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
     def forward(self, hidden_states):
+        if self.use_reformer: # reformer uses preact, so layernorm is now at beginning of block
+            hidden_states = self.LayerNorm(hidden_states)
         hidden_states = self.dense(hidden_states)
         hidden_states = self.transform_act_fn(hidden_states)
-        hidden_states = self.LayerNorm(hidden_states)
+        if not self.use_reformer:
+            hidden_states = self.LayerNorm(hidden_states)
         return hidden_states
 
 
@@ -566,7 +649,12 @@ class BertModel(BertPreTrainedModel):
         super(BertModel, self).__init__(config)
 
         self.embeddings = BertEmbeddings(config)
-        self.encoder = BertEncoder(config)
+        if config.use_reformer:
+            logger.info("Using reformer BERT architecture")
+            self.encoder = ReformerBertEncoder(config)
+        else:
+            logger.info("Using standard BERT architecture")
+            self.encoder = BertEncoder(config)
         self.pooler = BertPooler(config)
 
         self.init_weights()
@@ -625,11 +713,11 @@ class BertModel(BertPreTrainedModel):
         encoder_outputs = self.encoder(embedding_output,
                                        extended_attention_mask,
                                        head_mask=head_mask)
-        sequence_output = encoder_outputs[0]
+        sequence_output = encoder_outputs
         pooled_output = self.pooler(sequence_output)
 
-        outputs = (sequence_output, pooled_output,) + encoder_outputs[1:]  # add hidden_states and attentions if they are here
-        return outputs  # sequence_output, pooled_output, (hidden_states), (attentions)
+        outputs = sequence_output
+        return outputs 
 
 
 @add_start_docstrings("""Bert Model with two heads on top as done during the pre-training:
@@ -769,16 +857,16 @@ class BertForMaskedLM(BertPreTrainedModel):
                             position_ids=position_ids, 
                             head_mask=head_mask)
 
-        sequence_output = outputs[0]
+        sequence_output = outputs
         prediction_scores = self.cls(sequence_output)
 
-        outputs = (prediction_scores,) + outputs[2:]  # Add hidden states and attention if they are here
+        outputs = (prediction_scores,)
         if masked_lm_labels is not None:
             loss_fct = CrossEntropyLoss(ignore_index=-1)
             masked_lm_loss = loss_fct(prediction_scores.view(-1, self.config.vocab_size), masked_lm_labels.view(-1))
             outputs = (masked_lm_loss,) + outputs
 
-        return outputs  # (masked_lm_loss), prediction_scores, (hidden_states), (attentions)
+        return outputs  # (masked_lm_loss), prediction_scores
 
 
 @add_start_docstrings("""Bert Model with a `next sentence prediction (classification)` head on top. """,
@@ -1095,12 +1183,16 @@ class BertForQuestionAnswering(BertPreTrainedModel):
     Examples::
 
         tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-        model = BertForQuestionAnswering.from_pretrained('bert-base-uncased')
-        input_ids = torch.tensor(tokenizer.encode("Hello, my dog is cute")).unsqueeze(0)  # Batch size 1
-        start_positions = torch.tensor([1])
-        end_positions = torch.tensor([3])
-        outputs = model(input_ids, start_positions=start_positions, end_positions=end_positions)
-        loss, start_scores, end_scores = outputs[:2]
+        model = BertForQuestionAnswering.from_pretrained('bert-large-uncased-whole-word-masking-finetuned-squad')
+        question, text = "Who was Jim Henson?", "Jim Henson was a nice puppet"
+        input_text = "[CLS] " + question + " [SEP] " + text + " [SEP]"
+        input_ids = tokenizer.encode(input_text)
+        token_type_ids = [0 if i <= input_ids.index(102) else 1 for i in range(len(input_ids))] 
+        start_scores, end_scores = model(torch.tensor([input_ids]), token_type_ids=torch.tensor([token_type_ids]))
+        all_tokens = tokenizer.convert_ids_to_tokens(input_ids)  
+        print(' '.join(all_tokens[torch.argmax(start_scores) : torch.argmax(end_scores)+1]))
+        # a nice puppet
+
 
     """
     def __init__(self, config):
