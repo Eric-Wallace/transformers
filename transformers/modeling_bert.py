@@ -383,14 +383,33 @@ class ReformerBertEncoder(nn.Module):
     # ReversibeBlock handles the memory efficiency
     def __init__(self, config):
         super(ReformerBertEncoder, self).__init__()
-        module_list = []
+        attention_layer_list = []
+        mlp_layer_list = []
         for _ in range(config.num_hidden_layers):
             attentionLayer = BertAttention(config)
-            mlpLayer = ReformerMLPLayer(config)
-            revBlock = ReversibleBlock(attentionLayer, mlpLayer)
-            module_list.append(revBlock)
-        self.layer = nn.ModuleList(module_list)
-
+            mlpLayer = ReformerMLPLayer(config)         
+            attention_layer_list.append(attentionLayer)
+            mlp_layer_list.append(mlpLayer)
+        attention_layer_list = nn.ModuleList(attention_layer_list)
+        mlp_layer_list = nn.ModuleList(mlp_layer_list)
+        self.layer = torch.nn.ModuleList([ReversibleBlock(attention_layer_list, mlp_layer_list)])
+        # 1 layer model with all the layers inside it
+        
+        #layer_list = []
+        #for _ in range(config.num_hidden_layers):
+        #    attentionLayer = BertAttention(config)
+        #    mlpLayer = ReformerMLPLayer(config)
+        #    layer_list.append((attentionLayer, mlpLayer))
+        #self.layer = [ReversibleBlock(layer_list)]
+        
+        #module_list = []
+        #for _ in range(1):#config.num_hidden_layers):
+        #    attentionLayer = BertAttention(config)
+        #    mlpLayer = ReformerMLPLayer(config)
+        #    revBlock = ReversibleBlock(attentionLayer, mlpLayer)
+        #    module_list.append(revBlock)
+        #self.layer = nn.ModuleList(module_list)
+        
     def forward(self, hidden_states, attention_mask=None, head_mask=None):
         all_hidden_states = ()
         all_attentions = ()
@@ -398,7 +417,7 @@ class ReformerBertEncoder(nn.Module):
             # pass in a tuple, which is undone in the reversible block
             layer_outputs = layer_module((hidden_states, attention_mask)) 
             hidden_states = layer_outputs
-         
+        
         outputs = hidden_states
         return outputs
 
@@ -462,19 +481,19 @@ class BertPredictionHeadTransform(nn.Module):
             self.transform_act_fn = config.hidden_act
         self.use_reformer = config.use_reformer
         if self.use_reformer:
-            self.dense = nn.Linear(2 * config.hidden_size, config.hidden_size)
-            self.LayerNorm = BertLayerNorm(2 * config.hidden_size, eps=config.layer_norm_eps)
+             # down projection, that way final softmax inside LMPredictionHead can be tied to input embeddings
+            self.dense = nn.Linear(2 * config.hidden_size, config.hidden_size) 
+            self.LayerNormFirst = BertLayerNorm(2 * config.hidden_size, eps=config.layer_norm_eps)
         else:
             self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-            self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
     def forward(self, hidden_states):
         if self.use_reformer: # reformer uses preact, so layernorm is now at beginning of block
-            hidden_states = self.LayerNorm(hidden_states)
+            hidden_states = self.LayerNormFirst(hidden_states)
         hidden_states = self.dense(hidden_states)
         hidden_states = self.transform_act_fn(hidden_states)
-        if not self.use_reformer:
-            hidden_states = self.LayerNorm(hidden_states)
+        hidden_states = self.LayerNorm(hidden_states) # reformer also has layernorm at the end
         return hidden_states
 
 
@@ -1239,3 +1258,4 @@ class BertForQuestionAnswering(BertPreTrainedModel):
             outputs = (total_loss,) + outputs
 
         return outputs  # (loss), start_logits, end_logits, (hidden_states), (attentions)
+

@@ -227,9 +227,10 @@ def train(args, train_dataset, model, tokenizer):
             inputs = inputs.to(args.device)
             labels = labels.to(args.device)
             model.train()
+            current_mem_allocation = torch.cuda.memory_allocated(args.device)
             outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(inputs, labels=labels)
+            print("After forward", torch.cuda.memory_allocated(args.device) - current_mem_allocation)
             loss = outputs[0]  # model outputs are always tuple in transformers (see doc)
-
             if args.n_gpu > 1:
                 loss = loss.mean()  # mean() to average on multi-gpu parallel training
             if args.gradient_accumulation_steps > 1:
@@ -240,7 +241,8 @@ def train(args, train_dataset, model, tokenizer):
                     scaled_loss.backward()
             else:
                 loss.backward()
-
+                print("After backward", torch.cuda.memory_allocated(args.device) - current_mem_allocation)
+ 
             tr_loss += loss.item()
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 if args.fp16:
@@ -249,6 +251,7 @@ def train(args, train_dataset, model, tokenizer):
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
                 optimizer.step()
                 scheduler.step()  # Update learning rate schedule
+                print("After step", torch.cuda.memory_allocated(args.device) - current_mem_allocation)
                 model.zero_grad()
                 global_step += 1
 
@@ -479,8 +482,6 @@ def main():
     args.block_size = min(args.block_size, tokenizer.max_len_single_sentence)
     model = model_class(config)
     model.to(args.device)
-
-
 
     if args.local_rank == 0:
         torch.distributed.barrier()  # End of barrier to make sure only the first process in distributed training download model & vocab
