@@ -3,7 +3,7 @@ import numpy as np
 from copy import deepcopy
 
 hidden_tensor_dim = 2 # dimension 2 is the hidden dimension of the transformer for huggingface
-clear = True
+clear = False
 
 class ReversibleBlock(torch.nn.Module):
     def __init__(self, F_list, G_list):
@@ -18,9 +18,7 @@ class ReversibleBlock(torch.nn.Module):
         if debug: # no memory saving, used for debugging.
             out = x
             for i in range(len(self.F_list)):
-                # TODO, all of the contiguous calls seem unneccesary here (for correctness), does calling contiguous manually have any speed improvements?
                 x1, x2 = torch.chunk(out, 2, dim=hidden_tensor_dim) # split the initial embeddings
-                # x1, x2 = x1.contiguous(), x2.contiguous()
                 Fd = self.F_list[i].forward(x2, attention_mask)
                 y1 = x1 + Fd
                 Gd = self.G_list[i].forward(y1)
@@ -67,7 +65,6 @@ class ReversibleBlockFunction(torch.autograd.Function):
             for i in range(len(F_list)):
                 # partition in two equally sized set of channels
                 # TODO, lots of unnecessary cat and then chunking
-                # x1, x2 = x1.contiguous(), x2.contiguous()
 
                 # compute outputs
                 # TODO, can we do forwards of F and G in parallel? Will pytorch do that automatically?
@@ -106,10 +103,8 @@ class ReversibleBlockFunction(torch.autograd.Function):
 
         with torch.no_grad():
             y1, y2 = torch.chunk(output, 2, dim=hidden_tensor_dim)
-            # y1, y2 = y1.contiguous(), y2.contiguous()
             
             y1_grad, y2_grad = torch.chunk(grad_output, 2, dim=hidden_tensor_dim)
-            # y1_grad, y2_grad = y1_grad.contiguous(), y2_grad.contiguous()
 
             if clear:
                 output.set_()
@@ -191,7 +186,7 @@ class ReversibleBlockFunction(torch.autograd.Function):
             del y2_grad
 
         # restore input
-        xout = torch.cat([y1, y2], dim=hidden_tensor_dim)#.contiguous()
+        xout = torch.cat([y1, y2], dim=hidden_tensor_dim)
         if clear:
             y1.set_()
             del y1

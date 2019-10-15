@@ -395,20 +395,6 @@ class ReformerBertEncoder(nn.Module):
         self.layer = torch.nn.ModuleList([ReversibleBlock(attention_layer_list, mlp_layer_list)])
         # 1 layer model with all the layers inside it
         
-        #layer_list = []
-        #for _ in range(config.num_hidden_layers):
-        #    attentionLayer = BertAttention(config)
-        #    mlpLayer = ReformerMLPLayer(config)
-        #    layer_list.append((attentionLayer, mlpLayer))
-        #self.layer = [ReversibleBlock(layer_list)]
-        
-        #module_list = []
-        #for _ in range(1):#config.num_hidden_layers):
-        #    attentionLayer = BertAttention(config)
-        #    mlpLayer = ReformerMLPLayer(config)
-        #    revBlock = ReversibleBlock(attentionLayer, mlpLayer)
-        #    module_list.append(revBlock)
-        #self.layer = nn.ModuleList(module_list)
         
     def forward(self, hidden_states, attention_mask=None, head_mask=None):
         all_hidden_states = ()
