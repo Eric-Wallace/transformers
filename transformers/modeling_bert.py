@@ -269,7 +269,7 @@ class BertSelfOutput(nn.Module):
         if not self.use_reformer:
             hidden_states = self.LayerNorm(hidden_states + input_tensor)
         else:
-            hidden_states = hidden_states + input_tensor
+            hidden_states = hidden_states # there is no skip connection inside the blocks for reformer # + input_tensor
         return hidden_states
 
 
@@ -346,7 +346,7 @@ class BertOutput(nn.Module):
         if not self.use_reformer:
             hidden_states = self.LayerNorm(hidden_states + input_tensor)
         else:
-            hidden_states = hidden_states + input_tensor
+            hidden_states = hidden_states # there is no skip connection inside the blocks for reformer # + input_tensor
         return hidden_states
 
 
@@ -394,8 +394,7 @@ class ReformerBertEncoder(nn.Module):
         mlp_layer_list = nn.ModuleList(mlp_layer_list)
         self.layer = torch.nn.ModuleList([ReversibleBlock(attention_layer_list, mlp_layer_list)])
         # 1 layer model with all the layers inside it
-        
-        
+                
     def forward(self, hidden_states, attention_mask=None, head_mask=None):
         all_hidden_states = ()
         all_attentions = ()
