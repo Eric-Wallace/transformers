@@ -34,10 +34,10 @@ RUN python3 ./transformers/utils/past_ci_versions.py --framework $FRAMEWORK --ve
 RUN echo "INSTALL_CMD = $INSTALL_CMD"
 RUN $INSTALL_CMD
 
-RUN [ "$FRAMEWORK" != "pre" ] && python3 -m pip install --no-cache-dir ./transformers[deepspeed-testing]
+RUN [ "$FRAMEWORK" != "pytorch" ] && python3 -m pip install --no-cache-dir ./transformers[deepspeed-testing]
 
 # Pre-build **nightly** release of DeepSpeed, so it would be ready for testing (otherwise, the 1st deepspeed test will timeout)
-RUN [ "$FRAMEWORK" != "pre" ] && RUN python3 -m pip uninstall -y deepspeed
+RUN [ "$FRAMEWORK" != "pytorch" ] && python3 -m pip uninstall -y deepspeed
 # This has to be run inside the GPU VMs running the tests. (So far, it fails here due to GPU checks during compilation.)
 # Issue: https://github.com/microsoft/DeepSpeed/issues/2010
 # RUN git clone https://github.com/microsoft/DeepSpeed && cd DeepSpeed && rm -rf build && \
