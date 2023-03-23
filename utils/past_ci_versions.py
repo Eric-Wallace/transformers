@@ -67,29 +67,46 @@ past_versions_testing = {
         },
     },
     "tensorflow": {
+        "2.11": {
+            "tensorflow": "2.11.1",
+            "install": "python3 -m pip install --no-cache-dir -U tensorflow==2.11.1",
+            "base_image": "nvidia/cuda:11.2.2-cudnn8-devel-ubuntu20.04",
+        },
+        "2.10": {
+            "tensorflow": "2.10.1",
+            "install": "python3 -m pip install --no-cache-dir -U tensorflow==2.10.1",
+            "base_image": "nvidia/cuda:11.2.2-cudnn8-devel-ubuntu20.04",
+        },
+        "2.9": {
+            "tensorflow": "2.9.3",
+            "install": "python3 -m pip install --no-cache-dir -U tensorflow==2.9.3",
+            "base_image": "nvidia/cuda:11.2.2-cudnn8-devel-ubuntu20.04",
+        },
         "2.8": {
             "tensorflow": "2.8.2",
             "install": "python3 -m pip install --no-cache-dir -U tensorflow==2.8.2",
+            "base_image": "nvidia/cuda:11.2.2-cudnn8-devel-ubuntu20.04",
         },
         "2.7": {
             "tensorflow": "2.7.3",
             "install": "python3 -m pip install --no-cache-dir -U tensorflow==2.7.3",
+            "base_image": "nvidia/cuda:11.2.2-cudnn8-devel-ubuntu20.04",
         },
         "2.6": {
             "tensorflow": "2.6.5",
             "install": "python3 -m pip install --no-cache-dir -U tensorflow==2.6.5",
+            "base_image": "nvidia/cuda:11.2.2-cudnn8-devel-ubuntu20.04",
         },
         "2.5": {
             "tensorflow": "2.5.3",
             "install": "python3 -m pip install --no-cache-dir -U tensorflow==2.5.3",
+            "base_image": "nvidia/cuda:11.2.2-cudnn8-devel-ubuntu20.04",
         },
         # need another `nvidia:cuda` docker image, otherwise GPU not working
         "2.4": {
             "tensorflow": "2.4.4",
             "install": "python3 -m pip install --no-cache-dir -U tensorflow==2.4.4",
-            # This should be specified as a docker build argument.
-            # We keep the information here for reference only.
-            "base_docker": "nvidia/cuda:11.0.3-cudnn8-devel-ubuntu20.04",
+            "base_image": "nvidia/cuda:11.0.3-cudnn8-devel-ubuntu20.04",
         },
     },
 }
