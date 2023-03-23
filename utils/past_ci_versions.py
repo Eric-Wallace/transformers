@@ -4,6 +4,17 @@ import os
 
 past_versions_testing = {
     "pytorch": {
+        "1.13": {
+            "torch": "1.13.1",
+            "torchvision": "0.14.1",
+            "torchaudio": "0.13.1",
+            "python": 3.9,
+            "cuda": "cu116",
+            "install": (
+                "python3 -m pip install --no-cache-dir -U torch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1"
+                " --extra-index-url https://download.pytorch.org/whl/cu116"
+            ),
+        },
         "1.12": {
             "torch": "1.12.1",
             "torchvision": "0.13.1",
@@ -47,61 +58,6 @@ past_versions_testing = {
             "install": (
                 "python3 -m pip install --no-cache-dir -U torch==1.9.1 torchvision==0.10.1 torchaudio==0.9.1"
                 " --extra-index-url https://download.pytorch.org/whl/cu111"
-            ),
-        },
-        "1.8": {
-            "torch": "1.8.1",
-            "torchvision": "0.9.1",
-            "torchaudio": "0.8.1",
-            "python": 3.9,
-            "cuda": "cu111",
-            "install": (
-                "python3 -m pip install --no-cache-dir -U torch==1.8.1 torchvision==0.9.1 torchaudio==0.8.1"
-                " --extra-index-url https://download.pytorch.org/whl/cu111"
-            ),
-        },
-        "1.7": {
-            "torch": "1.7.1",
-            "torchvision": "0.8.2",
-            "torchaudio": "0.7.2",
-            "python": 3.9,
-            "cuda": "cu110",
-            "install": (
-                "python3 -m pip install --no-cache-dir -U torch==1.7.1 torchvision==0.8.2 torchaudio==0.7.2"
-                " --extra-index-url https://download.pytorch.org/whl/cu110"
-            ),
-        },
-        "1.6": {
-            "torch": "1.6.0",
-            "torchvision": "0.7.0",
-            "torchaudio": "0.6.0",
-            "python": 3.8,
-            "cuda": "cu101",
-            "install": (
-                "python3 -m pip install --no-cache-dir -U torch==1.6.0 torchvision==0.7.0 torchaudio==0.6.0"
-                " --extra-index-url https://download.pytorch.org/whl/cu101"
-            ),
-        },
-        "1.5": {
-            "torch": "1.5.1",
-            "torchvision": "0.6.1",
-            "torchaudio": "0.5.1",
-            "python": 3.8,
-            "cuda": "cu101",
-            "install": (
-                "python3 -m pip install --no-cache-dir -U torch==1.5.1 torchvision==0.6.1 torchaudio==0.5.1"
-                " --extra-index-url https://download.pytorch.org/whl/cu101"
-            ),
-        },
-        "1.4": {
-            "torch": "1.4.0",
-            "torchvision": "0.5.0",
-            "torchaudio": "0.4.0",
-            "python": 3.8,
-            "cuda": "cu100",
-            "install": (
-                "python3 -m pip install --no-cache-dir -U torch==1.4.0 torchvision==0.5.0 torchaudio==0.4.0"
-                " --extra-index-url https://download.pytorch.org/whl/cu100"
             ),
         },
     },

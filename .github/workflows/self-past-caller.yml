@@ -35,56 +35,6 @@ jobs:
       version: "1.9"
     secrets: inherit
 
-  run_past_ci_pytorch_1-8:
-    name: PyTorch 1.8
-    if: always()
-    needs: [run_past_ci_pytorch_1-9]
-    uses: ./.github/workflows/self-past.yml
-    with:
-      framework: pytorch
-      version: "1.8"
-    secrets: inherit
-
-  run_past_ci_pytorch_1-7:
-    name: PyTorch 1.7
-    if: always()
-    needs: [run_past_ci_pytorch_1-8]
-    uses: ./.github/workflows/self-past.yml
-    with:
-      framework: pytorch
-      version: "1.7"
-    secrets: inherit
-
-  run_past_ci_pytorch_1-6:
-    name: PyTorch 1.6
-    if: always()
-    needs: [run_past_ci_pytorch_1-7]
-    uses: ./.github/workflows/self-past.yml
-    with:
-      framework: pytorch
-      version: "1.6"
-    secrets: inherit
-
-  run_past_ci_pytorch_1-5:
-    name: PyTorch 1.5
-    if: always()
-    needs: [run_past_ci_pytorch_1-6]
-    uses: ./.github/workflows/self-past.yml
-    with:
-      framework: pytorch
-      version: "1.5"
-    secrets: inherit
-
-  run_past_ci_pytorch_1-4:
-    name: PyTorch 1.4
-    if: always()
-    needs: [run_past_ci_pytorch_1-5]
-    uses: ./.github/workflows/self-past.yml
-    with:
-      framework: pytorch
-      version: "1.4"
-    secrets: inherit
-
   run_past_ci_tensorflow_2-8:
     name: TensorFlow 2.8
     if: always()
