@@ -25,6 +25,11 @@ jobs:
         name: Check out code
         uses: actions/checkout@v3
       -
+        id: get-base-image
+        name: Get Base Image
+        run: |
+          echo "base_image=$(python3 -c '...')" >> $GITHUB_OUTPUT
+      -
         name: Login to DockerHub
         uses: docker/login-action@v2
         with:
@@ -37,6 +42,7 @@ jobs:
           context: ./docker/transformers-past-gpu
           build-args: |
             REF=main
+            BASE_DOCKER_IMAGE=${{ steps.get-base-image.outputs.base_image }}
             FRAMEWORK=pytorch
             VERSION=${{ matrix.version }}
           push: true
