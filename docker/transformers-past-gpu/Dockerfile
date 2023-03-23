@@ -1,4 +1,4 @@
-ARG BASE_DOCKER_IMAGE="nvidia/cuda:11.2.2-cudnn8-devel-ubuntu20.04"
+ARG BASE_DOCKER_IMAGE
 FROM $BASE_DOCKER_IMAGE
 LABEL maintainer="Hugging Face"
 

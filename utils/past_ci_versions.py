@@ -14,6 +14,7 @@ past_versions_testing = {
                 "python3 -m pip install --no-cache-dir -U torch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1"
                 " --extra-index-url https://download.pytorch.org/whl/cu116"
             ),
+            "base_image": "nvidia/cuda:11.6.2-cudnn8-devel-ubuntu20.04",
         },
         "1.12": {
             "torch": "1.12.1",
@@ -25,6 +26,7 @@ past_versions_testing = {
                 "python3 -m pip install --no-cache-dir -U torch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1"
                 " --extra-index-url https://download.pytorch.org/whl/cu113"
             ),
+            "base_image": "nvidia/cuda:11.2.2-cudnn8-devel-ubuntu20.04",
         },
         "1.11": {
             "torch": "1.11.0",
@@ -36,6 +38,7 @@ past_versions_testing = {
                 "python3 -m pip install --no-cache-dir -U torch==1.11.0 torchvision==0.12.0 torchaudio==0.11.0"
                 " --extra-index-url https://download.pytorch.org/whl/cu113"
             ),
+            "base_image": "nvidia/cuda:11.2.2-cudnn8-devel-ubuntu20.04",
         },
         "1.10": {
             "torch": "1.10.2",
@@ -47,6 +50,7 @@ past_versions_testing = {
                 "python3 -m pip install --no-cache-dir -U torch==1.10.2 torchvision==0.11.3 torchaudio==0.10.2"
                 " --extra-index-url https://download.pytorch.org/whl/cu113"
             ),
+            "base_image": "nvidia/cuda:11.2.2-cudnn8-devel-ubuntu20.04",
         },
         # torchaudio < 0.10 has no CUDA-enabled binary distributions
         "1.9": {
@@ -59,6 +63,7 @@ past_versions_testing = {
                 "python3 -m pip install --no-cache-dir -U torch==1.9.1 torchvision==0.10.1 torchaudio==0.9.1"
                 " --extra-index-url https://download.pytorch.org/whl/cu111"
             ),
+            "base_image": "nvidia/cuda:11.2.2-cudnn8-devel-ubuntu20.04",
         },
     },
     "tensorflow": {
