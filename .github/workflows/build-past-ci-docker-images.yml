@@ -27,8 +27,10 @@ jobs:
       -
         id: get-base-image
         name: Get Base Image
+        env:
+          framework_version: ${{ matrix.version }}
         run: |
-          echo "base_image=$(python3 -c 'from utils.past_ci_versions import past_versions_testing; base_image = past_versions_testing["pytorch"]["..."]["base_image"]; print(base_image)')" >> $GITHUB_OUTPUT
+          echo "base_image=$(python3 -c 'from utils.past_ci_versions import past_versions_testing; base_image = past_versions_testing["pytorch"][os.environ["framework_version"]]["base_image"]; print(base_image)')" >> $GITHUB_OUTPUT
       -
         name: Login to DockerHub
         uses: docker/login-action@v2
