@@ -3,7 +3,7 @@ name: Self-hosted runner (push)
 on:
   push:
     branches:
-      - update_tiny_models*
+      - run_auto_tiny
   repository_dispatch:
   schedule:
     - cron: "0 2 * * *"
